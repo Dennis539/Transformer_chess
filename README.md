@@ -22,6 +22,7 @@ for that. For this model, the following steps have been performed:
 - Encoding of interactions between squares
 - Pooled into one vector representation of the board
 - The mean value is through the value head to output one score which represents how good the position is.
+  Results were quite promising with it consistently beating the random player and able to beat a weak stockfish.
 
 ### Policy model
 
@@ -37,6 +38,8 @@ the model was only trained on moves which occured more than 50 times in the data
 In essence, this model was almost trained the same, with the exception that the input was not board value but
 board move. As a result, the outcome was not one value, but a tensor which contained one value for each move
 that the model saw during training.
+However, it doesn't appear that the model gave the desired output. Thus, it will only be used at the very end
+of matches.
 
 ### Chess engine
 

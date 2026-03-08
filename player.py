@@ -297,20 +297,24 @@ def eval_board_policy(
         to which move.
     """
 
+    temp_board = board.copy()
+    move = temp_board.pop().uci()
+    key = temp_board._transposition_key()
+    if key in eval_cache_endgame:
+        if move in eval_cache_endgame[key]:
+            return eval_cache_endgame[key][move]
     legal_moves = list(board.legal_moves)
     x = board_to_tensor(board).astype(np.float32)
     x = torch.from_numpy(x).unsqueeze(0).to(device)
     logits = model(x)["logits"][0]
 
     max_val = float("-inf")
-    for move in legal_moves:
-        uci_move = move.uci()
-        if uci_move in move_to_idx.keys():
-            idx = move_to_idx[uci_move]
-            val = logits[idx].item()
-            max_val = max(val, max_val)
+    eval_cache_endgame[key] = {}
+    for mv, index in move_to_idx.items():
+        val = logits[index].item()
+        eval_cache_endgame[key][mv] = val
 
-    return max_val
+    return eval_cache_endgame[key][move]
 
 
 PIECE_VALUE = {
@@ -343,7 +347,7 @@ def is_endgame(board: chess.Board) -> bool:
             value_black += len(board.pieces(piece, chess.BLACK)) * value
             value_white += len(board.pieces(piece, chess.WHITE)) * value
 
-    return value_white < 10 or value_black < 10 or (value_white + value_black) <= 20
+    return value_white < 5 or value_black < 5 or (value_white + value_black) < 10
 
 
 def is_passed_pawn(board: chess.Board, square: chess.Square) -> bool:
@@ -695,11 +699,14 @@ def choose_move(
     MATE_SCORE = 1e9
     global eval_cache
     global move_to_idx
+    global eval_cache_endgame
     move_to_idx = input_move_to_idx
     eval_cache = {}
+    eval_cache_endgame = {}
     pv_table = []
     endgame = is_endgame(board)
-
+    if endgame:
+        print("endgame")
     for dep in range(1, depth + 1):
         score, child_line = choose_move_value_alphabeta_it(
             board,
