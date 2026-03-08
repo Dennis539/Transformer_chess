@@ -494,7 +494,7 @@ def ordered_moves(
         """
         score = 0
         board.push(move)
-        if board.is_checkmate(move):
+        if board.is_checkmate():
             score += 2000
         board.pop()
         if best_move and move == best_move:
