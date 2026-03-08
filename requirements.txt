@@ -1,0 +1,6 @@
+python-chess
+torch
+requests
+chess-tournament
+huggingface-hub
+numpy
