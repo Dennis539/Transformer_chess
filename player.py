@@ -1,9 +1,9 @@
 from typing import Optional
-from .models import ValueTransformer, EndgamePolicyTransformer
+# from .models import ValueTransformer, EndgamePolicyTransformer
 import chess
 import torch
 import requests
-from .moves import choose_move
+# from .moves import choose_move
 from chess_tournament.players import Player
 
 
@@ -11,7 +11,7 @@ import numpy as np
 import torch
 import chess
 from functools import partial
-from models import ValueTransformer, EndgamePolicyTransformer
+# from models import ValueTransformer, EndgamePolicyTransformer
 from typing import Tuple
 
 from torch.utils.data import Dataset
