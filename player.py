@@ -347,7 +347,7 @@ def is_endgame(board: chess.Board) -> bool:
             value_black += len(board.pieces(piece, chess.BLACK)) * value
             value_white += len(board.pieces(piece, chess.WHITE)) * value
 
-    return value_white < 5 or value_black < 5 or (value_white + value_black) < 10
+    return value_white < 5 or value_black < 5 or (value_white + value_black) < 10000
 
 
 def is_passed_pawn(board: chess.Board, square: chess.Square) -> bool:
