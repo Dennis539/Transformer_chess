@@ -22,7 +22,11 @@ for that. For this model, the following steps have been performed:
 - Encoding of interactions between squares
 - Pooled into one vector representation of the board
 - The mean value is through the value head to output one score which represents how good the position is.
-  Results were quite promising with it consistently beating the random player and able to beat a weak stockfish.
+
+Results were quite promising with it consistently beating the random player and able to beat a weak stockfish.
+It was observed that the model still often made strange decisions against stronger opponents. Therefore,
+it is theorized that this is because the model has become good at picking the right move when it is already winning,
+but struggles when it isn't that clear.
 
 ### Policy model
 
