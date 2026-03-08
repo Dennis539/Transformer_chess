@@ -1,9 +1,9 @@
 from typing import Optional
-from transformer_dv.models import ValueTransformer, EndgamePolicyTransformer
+from .models import ValueTransformer, EndgamePolicyTransformer
 import chess
 import torch
 import requests
-from transformer_dv.moves import choose_move
+from .moves import choose_move
 from chess_tournament.players import Player
 
 
