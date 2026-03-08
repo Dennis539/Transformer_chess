@@ -14,7 +14,6 @@ from huggingface_hub import PyTorchModelHubMixin
 
 class TransformerPlayer(Player):
     def __init__(self, name):
-        torch.set_float32_matmul_precision('high')
         super().__init__(name)
         json_path_github = "https://raw.githubusercontent.com/Dennis539/Transformer_chess/refs/heads/main/move_to_idx.json"
         model_id_policy = "DVriend/Transformer-encodec-policy"
@@ -193,9 +192,9 @@ def board_to_tensor(
         for ptype in PIECE_TYPES:
             plane = np.zeros((8, 8), dtype=np.float32)
             for sq in board.pieces(ptype, color):
-                r = chess.square_rank(sq)
-                f = chess.square_file(sq)
-                plane[r, f] = 1.0
+                rank = chess.square_rank(sq)
+                fil = chess.square_file(sq)
+                plane[rank, fil] = 1.0
             planes.append(plane)
 
     if include_turn:
@@ -223,9 +222,9 @@ def board_to_tensor(
 
     ep_plane = np.zeros((8, 8), dtype=np.float32)
     if board.ep_square is not None:
-        r = chess.square_rank(board.ep_square)
-        f = chess.square_file(board.ep_square)
-        ep_plane[r, f] = 1.0
+        rank = chess.square_rank(board.ep_square)
+        fil = chess.square_file(board.ep_square)
+        ep_plane[rank, fil] = 1.0
     planes.append(ep_plane)
 
     halfmove = min(board.halfmove_clock, 100) / 100.0
@@ -233,8 +232,7 @@ def board_to_tensor(
     planes.append(np.full((8, 8), halfmove, dtype=np.float32))
     planes.append(np.full((8, 8), fullmove, dtype=np.float32))
 
-    x = np.stack(planes, axis=0)
-    return x
+    return np.stack(planes, axis=0)
 
 
 @torch.inference_mode()
@@ -264,9 +262,9 @@ def eval_board_value(
     if key in eval_cache:
         return float(eval_cache[key])
 
-    x = board_to_tensor(board).astype(np.float32)
-    x = torch.from_numpy(x).unsqueeze(0).to(device)
-    pred = model(x)["logits"].item()
+    board_tensor = board_to_tensor(board).astype(np.float32)
+    board_tensor = torch.from_numpy(board_tensor).unsqueeze(0).to(device)
+    pred = model(board_tensor)["logits"].item()
     eval_cache[key] = pred
     return float(pred)
 
@@ -304,12 +302,11 @@ def eval_board_policy(
     if key in eval_cache_endgame:
         if move in eval_cache_endgame[key]:
             return eval_cache_endgame[key][move]
-    legal_moves = list(board.legal_moves)
-    x = board_to_tensor(board).astype(np.float32)
-    x = torch.from_numpy(x).unsqueeze(0).to(device)
-    logits = model(x)["logits"][0]
 
-    max_val = float("-inf")
+    board_tensor = board_to_tensor(board).astype(np.float32)
+    board_tensor = torch.from_numpy(board_tensor).unsqueeze(0).to(device)
+    logits = model(board_tensor)["logits"][0]
+
     eval_cache_endgame[key] = {}
     for mv, index in move_to_idx.items():
         val = logits[index].item()
@@ -598,11 +595,11 @@ def choose_move_value_alphabeta_it(
 
         if depth == 0:
             if endgame:
-                v = eval_board_policy(board, model_policy, device=device)
+                value = eval_board_policy(board, model_policy, device=device)
 
             else:
-                v = eval_board_value(board, model_value, device=device)
-            return v, []
+                value = eval_board_value(board, model_value, device=device)
+            return value, []
 
         maximizing = board.turn == chess.WHITE
         best_line = []
