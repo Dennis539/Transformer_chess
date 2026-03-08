@@ -1,26 +1,15 @@
 from typing import Optional
 import chess
 import torch
+import torch.nn as nn
 import requests
-# from .moves import choose_move
 from chess_tournament.players import Player
 
-
 import numpy as np
-import torch
-import chess
 from functools import partial
 from typing import Tuple
 
-from torch.utils.data import Dataset
-
-
 from huggingface_hub import PyTorchModelHubMixin
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset
-
 
 
 class TransformerPlayer(Player):
@@ -55,21 +44,19 @@ class TransformerPlayer(Player):
 class ValueTransformer(nn.Module, PyTorchModelHubMixin):
     def __init__(
         self,
-        in_channels: int = 20,
+        input_channels: int = 20,
         d_model: int = 256,
         nhead: int = 8,
         num_layers: int = 4,
         dropout: float = 0.1,
     ):
         super().__init__()
-        # Project per-square features (C) -> d_model - Kind of like a feed-forward layer for backward propagation
-        self.input_proj = nn.Linear(in_channels, d_model)
+        self.square_projection = nn.Linear(input_channels, d_model)
 
-        # Learned positional embedding for 64 squares - parameter makes sure values are registered during backpropagation.
-        self.pos_emb = nn.Parameter(torch.zeros(64, d_model))
-        nn.init.normal_(self.pos_emb, std=0.02)
+        self.square_position_embedding = nn.Parameter(torch.zeros(64, d_model))
+        nn.init.normal_(self.square_position_embedding, std=0.02)
 
-        enc_layer = nn.TransformerEncoderLayer(
+        encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=4 * d_model,
@@ -78,39 +65,36 @@ class ValueTransformer(nn.Module, PyTorchModelHubMixin):
             activation="gelu",
             norm_first=True,
         )
-        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=num_layers)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
-        # Pool -> value head
         self.value_head = nn.Sequential(
             nn.LayerNorm(d_model),
             nn.Linear(d_model, d_model),
-            nn.GELU(),  # Activation function
+            nn.GELU(),
             nn.Linear(d_model, 1),
         )
         self.loss_fn = nn.SmoothL1Loss(beta=0.1)
 
-    def forward(self, x=None, labels=None):
+    def forward(self, board_tensor=None, labels=None):
         """
-        x: (B, C, 8, 8)
+        board_tensor: (batch_size, 20, 8, 8)
         returns: (B,) normalized value in roughly [-1,1]
         """
-        B, C, H, W = x.shape
-        assert (H, W) == (8, 8)
+        batch_size, num_channels, _, _ = board_tensor.shape
 
-        # Make square tokens: (B, 64, C)
-        # Permute switched dimensions
-        tokens = x.permute(0, 2, 3, 1).reshape(B, 64, C)
+        square_tokens = board_tensor.permute(0, 2, 3, 1).reshape(
+            batch_size, 64, num_channels
+        )
 
-        # Each square becomes a 256-dimensional embedding - Turning chess features into “neural language”
-        h = self.input_proj(tokens)
+        square_embeddings = self.square_projection(square_tokens)
+        square_embeddings = (
+            square_embeddings + self.square_position_embedding.unsqueeze(0)
+        )
 
-        # add position info - Each square index gets a learnable vector.
-        h = h + self.pos_emb.unsqueeze(0)
+        encoded_squares = self.encoder(square_embeddings)
+        board_embedding = encoded_squares.mean(dim=1)
 
-        h = self.encoder(h)  # (B,64,d_model)
-        pooled = h.mean(dim=1)  # (B,d_model) mean pool
-
-        pred = self.value_head(pooled).squeeze(-1)  # (B,)
+        pred = self.value_head(board_embedding).squeeze(-1)
         loss = None
         if labels is not None:
             loss = self.loss_fn(pred, labels)
@@ -129,13 +113,12 @@ class EndgamePolicyTransformer(nn.Module, PyTorchModelHubMixin):
         dropout: float = 0.1,
     ):
         super().__init__()
-        # Project per-square features (C) -> d_model - Kind of like a feed-forward layer for backward propagation
-        self.input_proj = nn.Linear(in_channels, d_model)
+        self.square_projection = nn.Linear(in_channels, d_model)
 
-        self.pos_emb = nn.Parameter(torch.zeros(64, d_model))
-        nn.init.normal_(self.pos_emb, std=0.02)
+        self.square_position_embedding = nn.Parameter(torch.zeros(64, d_model))
+        nn.init.normal_(self.square_position_embedding, std=0.02)
 
-        enc_layer = nn.TransformerEncoderLayer(
+        encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=4 * d_model,
@@ -144,7 +127,7 @@ class EndgamePolicyTransformer(nn.Module, PyTorchModelHubMixin):
             activation="gelu",
             norm_first=True,
         )
-        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=num_layers)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         self.policy_head = nn.Sequential(
             nn.LayerNorm(d_model),
@@ -154,33 +137,33 @@ class EndgamePolicyTransformer(nn.Module, PyTorchModelHubMixin):
         )
         self.loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, x, labels=None):
+    def forward(self, board_tensor, labels=None):
         """
-        x: (B, C, 8, 8)
+        board_tensor: (batch_size, 20, 8, 8)
         returns: dict with
             logits: (B, num_moves)
             loss: scalar or None
         """
-        B, C, H, W = x.shape
-        assert (H, W) == (8, 8)
+        batch_size, num_channels, _, _ = board_tensor.shape
 
-        tokens = x.permute(0, 2, 3, 1).reshape(B, 64, C)
-        h = self.input_proj(tokens)
+        square_tokens = board_tensor.permute(0, 2, 3, 1).reshape(
+            batch_size, 64, num_channels
+        )
+        square_embeddings = self.square_projection(square_tokens)
 
-        h = h + self.pos_emb.unsqueeze(0)
+        square_embeddings = (
+            square_embeddings + self.square_position_embedding.unsqueeze(0)
+        )
 
-        h = self.encoder(h)
-        pooled = h.mean(dim=1)
+        encoded_squares = self.encoder(square_embeddings)
+        board_embedding = encoded_squares.mean(dim=1)
 
-        logits = self.policy_head(pooled)
+        logits = self.policy_head(board_embedding)
         loss = None
         if labels is not None:
             loss = self.loss_fn(logits, labels)
 
         return {"loss": loss, "logits": logits}
-
-
-
 
 
 PIECE_TYPES = [
@@ -237,7 +220,6 @@ def board_to_tensor(
         plane(1.0 if board.has_queenside_castling_rights(chess.BLACK) else 0.0)
     )
 
-    # En-passant target plane (one-hot)
     ep_plane = np.zeros((8, 8), dtype=np.float32)
     if board.ep_square is not None:
         r = chess.square_rank(board.ep_square)
