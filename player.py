@@ -23,7 +23,7 @@ from torch.utils.data import Dataset
 
 
 
-class TransFormerPlayer(Player):
+class TransformerPlayer(Player):
     def __init__(self, name):
         super().__init__(name)
         json_path_github = "https://raw.githubusercontent.com/Dennis539/Transformer_chess/refs/heads/main/move_to_idx.json"
