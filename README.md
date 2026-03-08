@@ -28,6 +28,8 @@ It was observed that the model still often made strange decisions against strong
 it is theorized that this is because the model has become good at picking the right move when it is already winning,
 but struggles when it isn't that clear.
 
+Dataset was retrieved from https://www.kaggle.com/competitions/train-your-own-stockfish-nnue/data?select=train.csv
+
 ### Policy model
 
 During testing of the model, it was noticed that the Value-model seemed to struggle in the late-game. More

@@ -14,6 +14,7 @@ from huggingface_hub import PyTorchModelHubMixin
 
 class TransformerPlayer(Player):
     def __init__(self, name):
+        torch.set_float32_matmul_precision('high')
         super().__init__(name)
         json_path_github = "https://raw.githubusercontent.com/Dennis539/Transformer_chess/refs/heads/main/move_to_idx.json"
         model_id_policy = "DVriend/Transformer-encodec-policy"
